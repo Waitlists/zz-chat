@@ -1,5 +1,4 @@
 const express = require('express');
-const fs = require('fs');
 const http = require('http');
 const WebSocket = require('ws');
 const path = require('path');
@@ -8,60 +7,137 @@ const app = express();
 const server = http.createServer(app);
 const wss = new WebSocket.Server({ server });
 
-const PORT = process.env.PORT || 3000;
-const chatFile = path.join(__dirname, 'chat.json');
+const ADMIN_PASSWORD = 'HoardedGoats19/@94';
+
 let chatHistory = [];
-let users = {};
+const users = new Map(); // username -> { ws, ip, isAdmin }
 
-// Load chat history
-if (fs.existsSync(chatFile)) {
-  chatHistory = JSON.parse(fs.readFileSync(chatFile, 'utf8'));
-}
+app.use(express.static(path.join(__dirname)));
 
-app.get('/', (req, res) => res.sendFile(path.join(__dirname, 'index.html')));
-app.get('/style.css', (req, res) => res.sendFile(path.join(__dirname, 'style.css')));
-app.get('/client.js', (req, res) => res.sendFile(path.join(__dirname, 'client.js')));
-
-wss.on('connection', (ws) => {
-  let username = null;
+wss.on('connection', (ws, req) => {
+  const ip = req.socket.remoteAddress;
+  let currentUsername = null;
 
   ws.send(JSON.stringify({ type: 'history', data: chatHistory }));
 
-  ws.on('message', (message) => {
-    const msg = JSON.parse(message);
+  ws.on('message', (msg) => {
+    try {
+      const data = JSON.parse(msg);
 
-    if (msg.type === 'setName') {
-      if (Object.values(users).includes(msg.data)) {
-        ws.send(JSON.stringify({ type: 'error', data: 'Username taken' }));
-      } else {
-        username = msg.data;
-        users[ws] = username;
-        ws.send(JSON.stringify({ type: 'nameSet', data: username }));
-      }
-    }
+      if (data.type === 'setName') {
+        const requestedName = data.data;
+        const password = data.password || '';
 
-    if (msg.type === 'chat' && username) {
-      const entry = {
-        name: username,
-        color: msg.color,
-        message: msg.data,
-        timestamp: Date.now()
-      };
-      chatHistory.push(entry);
-      fs.writeFileSync(chatFile, JSON.stringify(chatHistory, null, 2));
-
-      const outbound = JSON.stringify({ type: 'chat', data: entry });
-      wss.clients.forEach(client => {
-        if (client.readyState === WebSocket.OPEN) {
-          client.send(outbound);
+        // Reject if already taken
+        if (users.has(requestedName)) {
+          ws.send(JSON.stringify({ type: 'error', data: 'Username already taken.' }));
+          return;
         }
-      });
+
+        // Admin authentication
+        const isAdmin = requestedName.toLowerCase() === 'admin';
+        if (isAdmin && password !== ADMIN_PASSWORD) {
+          ws.send(JSON.stringify({ type: 'error', data: 'Incorrect admin password.' }));
+          return;
+        }
+
+        // Set user
+        currentUsername = requestedName;
+        users.set(currentUsername, { ws, ip, isAdmin });
+
+        ws.send(JSON.stringify({ type: 'nameSet', data: currentUsername }));
+        ws.send(JSON.stringify({ type: 'adminStatus', data: isAdmin }));
+        console.log(`${currentUsername} connected (${ip})`);
+      }
+
+      else if (data.type === 'chat') {
+        if (!currentUsername) {
+          ws.send(JSON.stringify({ type: 'error', data: 'Please set a username first.' }));
+          return;
+        }
+
+        const messageObj = {
+          name: currentUsername,
+          color: data.color,
+          message: data.data
+        };
+
+        chatHistory.push(messageObj);
+        broadcast({ type: 'chat', data: messageObj });
+      }
+
+      else if (data.type === 'command') {
+        if (!currentUsername || !users.get(currentUsername).isAdmin) {
+          ws.send(JSON.stringify({ type: 'error', data: 'Unauthorized command.' }));
+          return;
+        }
+
+        const [cmd, ...args] = data.data.trim().split(/\s+/);
+
+        switch (cmd) {
+          case '/clear':
+            chatHistory = [];
+            broadcast({ type: 'system', data: 'Chat history cleared by admin.' });
+            break;
+
+          case '/who':
+            const targetName = args[0];
+            const targetUser = users.get(targetName);
+            if (targetUser) {
+              ws.send(JSON.stringify({ type: 'system', data: `${targetName} IP: ${targetUser.ip}` }));
+            } else {
+              ws.send(JSON.stringify({ type: 'system', data: `User "${targetName}" not found.` }));
+            }
+            break;
+
+          case '/online':
+            const userList = [...users.keys()].join(', ');
+            ws.send(JSON.stringify({ type: 'system', data: `Online users: ${userList}` }));
+            break;
+
+          case '/delete':
+            const userToKick = args[0];
+            const userEntry = users.get(userToKick);
+            if (userEntry) {
+              userEntry.ws.send(JSON.stringify({
+                type: 'kick',
+                data: 'You have been removed from the chat. Please refresh and choose a new username.'
+              }));
+              userEntry.ws.close();
+              users.delete(userToKick);
+              broadcast({ type: 'system', data: `${userToKick} was removed by admin.` });
+            } else {
+              ws.send(JSON.stringify({ type: 'system', data: `User "${userToKick}" not found.` }));
+            }
+            break;
+
+          default:
+            ws.send(JSON.stringify({ type: 'system', data: `Unknown command: ${cmd}` }));
+            break;
+        }
+      }
+
+    } catch (err) {
+      console.error('Error handling message:', err);
     }
   });
 
   ws.on('close', () => {
-    delete users[ws];
+    if (currentUsername && users.has(currentUsername)) {
+      users.delete(currentUsername);
+      console.log(`${currentUsername} disconnected`);
+    }
   });
 });
 
-server.listen(PORT, () => console.log(`zz chat running on port ${PORT}`));
+function broadcast(message) {
+  for (const { ws } of users.values()) {
+    if (ws.readyState === WebSocket.OPEN) {
+      ws.send(JSON.stringify(message));
+    }
+  }
+}
+
+server.listen(process.env.PORT || 3000, () => {
+  console.log('zz chat server running on port ' + (process.env.PORT || 3000));
+});

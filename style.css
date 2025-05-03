@@ -1,63 +1,57 @@
 body {
     margin: 0;
-    background: #000 url('https://www.transparenttextures.com/patterns/black-felt.png');
-    font-family: 'Courier New', monospace;
-    color: white;
-    display: flex;
-    justify-content: center;
-    align-items: center;
-    height: 100vh;
+    padding: 0;
+    background-color: #000;
+    background-image: radial-gradient(#222 1px, transparent 1px);
+    background-size: 20px 20px;
+    font-family: Arial, sans-serif;
+    color: #fff;
   }
   
   #chat-container {
-    width: 90%;
-    max-width: 800px;
-    height: 90vh;
     display: flex;
     flex-direction: column;
-    border: 2px solid #444;
-    padding: 10px;
-    background: rgba(0,0,0,0.7);
-    overflow: hidden;
-    border-radius: 12px;
+    height: 100vh;
   }
   
   #messages {
     flex: 1;
+    padding: 10px;
     overflow-y: auto;
-    margin-bottom: 10px;
   }
   
-  #input-bar {
+  #input-area {
     display: flex;
-    gap: 10px;
+    padding: 10px;
+    background-color: #111;
   }
   
   #input {
     flex: 1;
     padding: 10px;
-    background: #111;
     border: none;
-    color: white;
-    font-size: 16px;
-    outline: none;
+    border-radius: 4px;
   }
   
   #send {
     padding: 10px 20px;
-    background: #222;
-    color: white;
+    margin-left: 10px;
     border: none;
-    font-size: 16px;
+    border-radius: 4px;
+    background-color: #444;
+    color: #fff;
     cursor: pointer;
-  }
-  
-  #send:hover {
-    background: #444;
   }
   
   .username {
     font-weight: bold;
-    text-shadow: 0 0 5px white;
+    margin-right: 5px;
+    text-shadow: 0 0 5px;
+  }
+  
+  .system-message {
+    color: yellow;
+    font-style: italic;
+    margin: 5px 0;
   }
   
