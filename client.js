@@ -1,10 +1,8 @@
 const socket = new WebSocket(`${location.protocol === 'https:' ? 'wss' : 'ws'}://${location.host}`);
-
 let username = localStorage.getItem('username') || null;
 let color = localStorage.getItem('color') || getRandomColor();
 let isAdmin = false;
 let pendingMessage = null;
-let isLockedDown = false;
 
 const input = document.getElementById('input');
 const sendBtn = document.getElementById('send');
@@ -23,8 +21,11 @@ function attemptSend() {
 }
 
 input.addEventListener('keydown', (e) => {
-  if (e.key === 'Enter') attemptSend();
+  if (e.key === 'Enter') {
+    attemptSend();
+  }
 });
+
 sendBtn.addEventListener('click', attemptSend);
 
 socket.addEventListener('open', () => {
@@ -54,6 +55,10 @@ socket.addEventListener('message', (e) => {
       username = msg.data;
       localStorage.setItem('username', username);
       localStorage.setItem('color', color);
+      if (pendingMessage) {
+        sendMessage(pendingMessage);
+        pendingMessage = null;
+      }
       break;
     case 'adminStatus':
       isAdmin = msg.data;
@@ -62,30 +67,11 @@ socket.addEventListener('message', (e) => {
       alert(msg.data);
       localStorage.removeItem('username');
       localStorage.removeItem('color');
-      location.reload();
-      break;
-    case 'clear':
-      messages.innerHTML = '';
-      break;
-    case 'lockdown':
-      isLockedDown = msg.data;
-      toggleInputLock(isLockedDown);
-      break;
-    case 'onlineList':
-      msg.data.forEach(user => {
-        const span = document.createElement('div');
-        span.innerHTML = `<span class="username" style="color:${user.color}; text-shadow: 0 0 5px ${user.color}">${user.name}</span>`;
-        messages.appendChild(span);
-      });
+      username = null;
+      color = getRandomColor();
       break;
   }
 });
-
-function toggleInputLock(lock) {
-  input.disabled = lock;
-  sendBtn.disabled = lock;
-  input.placeholder = lock ? 'The chat is locked' : 'Type a message...';
-}
 
 function sendMessage(text) {
   if (text.startsWith('/')) {
@@ -101,30 +87,43 @@ function drawMessage({ name, color, message }) {
   const nameSpan = document.createElement('span');
   nameSpan.classList.add('username');
   nameSpan.textContent = name + ': ';
-  nameSpan.style.color = name.toLowerCase() === 'admin' ? 'red' : color;
-  nameSpan.style.textShadow = `0 0 5px ${nameSpan.style.color}`;
+  if (name.toLowerCase() === 'admin') {
+    nameSpan.style.color = 'red';
+    nameSpan.style.textShadow = '0 0 5px red';
+  } else {
+    nameSpan.style.color = color;
+    nameSpan.style.textShadow = `0 0 5px ${color}`;
+  }
   div.appendChild(nameSpan);
   div.append(message);
   messages.appendChild(div);
+  // Do not scroll automatically
 }
 
 function drawSystemMessage(message) {
   if (isAdmin) {
     const div = document.createElement('div');
     div.classList.add('system-message');
-    div.innerHTML = `<span style="color: lime">[System]</span> <span style="color: white">${message}</span>`;
+    div.textContent = message;
     messages.appendChild(div);
+    // Do not auto scroll
   }
 }
 
 function promptForUsername() {
-  const name = prompt("Please choose a username (a-z, 0-9, _, $, #):");
-  if (!name || !/^[a-zA-Z0-9_$#]{1,21}$/.test(name)) {
-    alert("Invalid username.");
+  const name = prompt("Please choose a username to join the chat:");
+  if (!name || !name.trim()) {
+    alert("A valid username is required.");
     return;
   }
 
-  if (name.toLowerCase() === 'admin') {
+  const valid = /^[a-zA-Z0-9_$#]{1,21}$/.test(name.trim());
+  if (!valid) {
+    alert("Username can only contain letters, numbers, _, $, # and must be 1–21 characters.");
+    return;
+  }
+
+  if (name.trim().toLowerCase() === 'admin') {
     const password = prompt("Enter admin password:");
     socket.send(JSON.stringify({ type: 'setName', data: name.trim(), password, color }));
   } else {
