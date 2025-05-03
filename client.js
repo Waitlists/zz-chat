@@ -21,16 +21,14 @@ function attemptSend() {
 }
 
 input.addEventListener('keydown', (e) => {
-  if (e.key === 'Enter') {
-    attemptSend();
-  }
+  if (e.key === 'Enter') attemptSend();
 });
 
 sendBtn.addEventListener('click', attemptSend);
 
 socket.addEventListener('open', () => {
   if (username) {
-    socket.send(JSON.stringify({ type: 'setName', data: username }));
+    socket.send(JSON.stringify({ type: 'setName', data: username, color }));
   }
 });
 
@@ -47,6 +45,9 @@ socket.addEventListener('message', (e) => {
     case 'system':
       drawSystemMessage(msg.data);
       break;
+    case 'clearChat':
+      messages.innerHTML = '';
+      break;
     case 'error':
       alert(msg.data);
       pendingMessage = null;
@@ -55,6 +56,10 @@ socket.addEventListener('message', (e) => {
       username = msg.data;
       localStorage.setItem('username', username);
       localStorage.setItem('color', color);
+      if (pendingMessage) {
+        sendMessage(pendingMessage);
+        pendingMessage = null;
+      }
       break;
     case 'adminStatus':
       isAdmin = msg.data;
@@ -65,6 +70,16 @@ socket.addEventListener('message', (e) => {
       localStorage.removeItem('color');
       username = null;
       color = getRandomColor();
+      break;
+    case 'onlineList':
+      if (isAdmin) {
+        const div = document.createElement('div');
+        div.classList.add('system-message');
+        div.innerHTML = `<span class="username" style="color: lime; text-shadow: 0 0 5px lime;">[System]</span> <span style="color: white">Online users:</span> ` +
+          msg.data.map(u => `<span class="username" style="color:${u.color}; text-shadow:0 0 5px ${u.color}">${u.name}</span>`).join(', ');
+        messages.appendChild(div);
+        messages.scrollTop = messages.scrollHeight;
+      }
       break;
   }
 });
@@ -97,40 +112,39 @@ function drawMessage({ name, color, message }) {
 }
 
 function drawSystemMessage(message) {
-    if (isAdmin) {
-      const div = document.createElement('div');
-      div.classList.add('system-message');
-  
-      const prefix = document.createElement('span');
-      prefix.classList.add('prefix');
-      prefix.textContent = '[System]: ';
-  
-      const content = document.createElement('span');
-      content.classList.add('text');
-      content.innerHTML = message;
-  
-      div.appendChild(prefix);
-      div.appendChild(content);
-      messages.appendChild(div);
-      messages.scrollTop = messages.scrollHeight;
-    }
+  if (isAdmin) {
+    const div = document.createElement('div');
+    div.classList.add('system-message');
+    div.innerHTML = `<span class="username" style="color: lime; text-shadow: 0 0 5px lime;">[System]</span> <span style="color: white">${message}</span>`;
+    messages.appendChild(div);
+    messages.scrollTop = messages.scrollHeight;
   }
-  
+}
 
 function promptForUsername() {
-  const name = prompt("Please choose a username to join the chat:");
+  const name = prompt("Please choose a username (a-z, 0-9, _, $, #, max 21 chars):");
   if (name && name.trim()) {
-    if (name.trim().toLowerCase() === 'admin') {
+    const trimmed = name.trim();
+    const valid = /^[a-z0-9_$#]{1,21}$/i.test(trimmed);
+    if (!valid) {
+      alert("Invalid username. Use only a-z, 0-9, _, $, or # (max 21 chars).");
+      return;
+    }
+    if (trimmed.toLowerCase() === 'admin') {
       const password = prompt("Enter admin password:");
-      socket.send(JSON.stringify({ type: 'setName', data: name.trim(), password }));
+      socket.send(JSON.stringify({ type: 'setName', data: trimmed, password, color }));
     } else {
-      socket.send(JSON.stringify({ type: 'setName', data: name.trim() }));
+      socket.send(JSON.stringify({ type: 'setName', data: trimmed, color }));
     }
   } else {
-    alert("A username is required to send messages.");
+    alert("A valid username is required to chat.");
   }
 }
 
 function getRandomColor() {
-  return `hsl(${Math.floor(Math.random() * 360)}, 100%, 70%)`;
+  const existing = localStorage.getItem('color');
+  if (existing) return existing;
+  const color = `hsl(${Math.floor(Math.random() * 360)}, 100%, 70%)`;
+  localStorage.setItem('color', color);
+  return color;
 }

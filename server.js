@@ -14,6 +14,18 @@ const users = new Map(); // username -> { ws, ip, isAdmin, color }
 
 app.use(express.static(path.join(__dirname)));
 
+function isValidUsername(name) {
+  return /^[a-z0-9_$#]{1,21}$/i.test(name);
+}
+
+function broadcast(message) {
+  for (const { ws } of users.values()) {
+    if (ws.readyState === WebSocket.OPEN) {
+      ws.send(JSON.stringify(message));
+    }
+  }
+}
+
 wss.on('connection', (ws, req) => {
   const ip = req.socket.remoteAddress;
   let currentUsername = null;
@@ -27,9 +39,10 @@ wss.on('connection', (ws, req) => {
       if (data.type === 'setName') {
         const requestedName = data.data?.trim();
         const password = data.password || '';
+        const clientColor = data.color;
 
-        if (!requestedName || requestedName.length === 0 || requestedName.length > 21) {
-          ws.send(JSON.stringify({ type: 'error', data: 'Invalid username. Max 21 characters and cannot be empty or spaces.' }));
+        if (!requestedName || !isValidUsername(requestedName)) {
+          ws.send(JSON.stringify({ type: 'error', data: 'Invalid username. Use only a-z, 0-9, _, $, or # (max 21 chars).' }));
           return;
         }
 
@@ -44,9 +57,8 @@ wss.on('connection', (ws, req) => {
           return;
         }
 
-        const color = data.color || `hsl(${Math.floor(Math.random() * 360)}, 100%, 70%)`;
         currentUsername = requestedName;
-        users.set(currentUsername, { ws, ip, isAdmin, color });
+        users.set(currentUsername, { ws, ip, isAdmin, color: clientColor });
 
         ws.send(JSON.stringify({ type: 'nameSet', data: currentUsername }));
         ws.send(JSON.stringify({ type: 'adminStatus', data: isAdmin }));
@@ -54,7 +66,7 @@ wss.on('connection', (ws, req) => {
       }
 
       else if (data.type === 'chat') {
-        if (!currentUsername || !users.has(currentUsername)) {
+        if (!currentUsername) {
           ws.send(JSON.stringify({ type: 'error', data: 'Please set a username first.' }));
           return;
         }
@@ -72,7 +84,7 @@ wss.on('connection', (ws, req) => {
 
       else if (data.type === 'command') {
         const user = users.get(currentUsername);
-        if (!currentUsername || !user?.isAdmin) {
+        if (!user || !user.isAdmin) {
           ws.send(JSON.stringify({ type: 'error', data: 'Unauthorized command.' }));
           return;
         }
@@ -88,33 +100,24 @@ wss.on('connection', (ws, req) => {
           case '/who':
             const targetName = args[0];
             const targetUser = users.get(targetName);
-            if (targetUser) {
-              ws.send(JSON.stringify({ type: 'system', data: `${targetName} IP: ${targetUser.ip}` }));
-            } else {
-              ws.send(JSON.stringify({ type: 'system', data: `User "${targetName}" not found.` }));
-            }
+            ws.send(JSON.stringify({ type: 'system', data: targetUser ? `${targetName} IP: ${targetUser.ip}` : `User "${targetName}" not found.` }));
             break;
 
           case '/online':
-            const userList = [...users.entries()].map(([name, { color }]) =>
-              `<span style="color:${color}; text-shadow:0 0 5px ${color}; font-weight:bold">${name}</span>`
-            ).join(', ');
-            ws.send(JSON.stringify({ type: 'system', data: `Online users: ${userList}` }));
+            const userList = Array.from(users.entries()).map(([name, data]) => ({ name, color: data.color }));
+            ws.send(JSON.stringify({ type: 'onlineList', data: userList }));
             break;
 
           case '/delete':
-            const userToKick = args[0];
-            const userEntry = users.get(userToKick);
-            if (userEntry) {
-              userEntry.ws.send(JSON.stringify({
-                type: 'kick',
-                data: 'You have been removed from the chat. Please refresh and choose a new username.'
-              }));
-              userEntry.ws.close();
-              users.delete(userToKick);
-              ws.send(JSON.stringify({ type: 'system', data: `User "${userToKick}" was kicked.` }));
+            const target = args[0];
+            const kickedUser = users.get(target);
+            if (kickedUser) {
+              kickedUser.ws.send(JSON.stringify({ type: 'kick', data: 'You have been removed. Refresh and pick a new name.' }));
+              kickedUser.ws.close();
+              users.delete(target);
+              ws.send(JSON.stringify({ type: 'system', data: `${target} was removed.` }));
             } else {
-              ws.send(JSON.stringify({ type: 'system', data: `User "${userToKick}" not found.` }));
+              ws.send(JSON.stringify({ type: 'system', data: `User "${target}" not found.` }));
             }
             break;
 
@@ -130,20 +133,12 @@ wss.on('connection', (ws, req) => {
   });
 
   ws.on('close', () => {
-    if (currentUsername && users.has(currentUsername)) {
+    if (currentUsername) {
       users.delete(currentUsername);
       console.log(`${currentUsername} disconnected`);
     }
   });
 });
-
-function broadcast(message) {
-  for (const { ws } of users.values()) {
-    if (ws.readyState === WebSocket.OPEN) {
-      ws.send(JSON.stringify(message));
-    }
-  }
-}
 
 server.listen(process.env.PORT || 3000, () => {
   console.log('zz chat server running on port ' + (process.env.PORT || 3000));
