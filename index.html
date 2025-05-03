@@ -6,15 +6,10 @@
   <link rel="stylesheet" href="style.css">
 </head>
 <body>
-  <div id="chatbox">
+  <div id="chat-container">
     <div id="messages"></div>
-    <form id="form">
-      <input id="input" autocomplete="off" placeholder="Type something..." />
-      <button>Send</button>
-    </form>
-    <a href="/logout">Logout</a>
+    <input id="input" placeholder="Type a message...">
   </div>
-  <script src="/socket.io/socket.io.js"></script>
   <script src="client.js"></script>
 </body>
 </html>
