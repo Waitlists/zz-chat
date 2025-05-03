@@ -1,21 +1,31 @@
 const socket = new WebSocket(`ws://${location.host}`);
 let username = null;
 let color = getRandomColor();
-let pendingMessage = null; // store attempted message if username not set
+let pendingMessage = null;
 
 const input = document.getElementById('input');
+const sendBtn = document.getElementById('send');
 const messages = document.getElementById('messages');
 
+function attemptSend() {
+  const text = input.value.trim();
+  if (!text) return;
+
+  if (!username) {
+    pendingMessage = text;
+    promptForUsername();
+  } else {
+    sendMessage(text);
+  }
+}
+
 input.addEventListener('keydown', (e) => {
-  if (e.key === 'Enter' && input.value.trim()) {
-    if (!username) {
-      pendingMessage = input.value.trim();
-      promptForUsername();
-    } else {
-      sendMessage(input.value.trim());
-    }
+  if (e.key === 'Enter') {
+    attemptSend();
   }
 });
+
+sendBtn.addEventListener('click', attemptSend);
 
 socket.addEventListener('message', (e) => {
   const msg = JSON.parse(e.data);
@@ -30,7 +40,7 @@ socket.addEventListener('message', (e) => {
 
   if (msg.type === 'error') {
     alert(msg.data);
-    pendingMessage = null; // reset if name taken
+    pendingMessage = null;
   }
 
   if (msg.type === 'nameSet') {
@@ -62,10 +72,10 @@ function drawMessage({ name, color, message }) {
 
 function promptForUsername() {
   const name = prompt("Please choose a username to join the chat:");
-  if (name) {
-    socket.send(JSON.stringify({ type: 'setName', data: name }));
+  if (name && name.trim()) {
+    socket.send(JSON.stringify({ type: 'setName', data: name.trim() }));
   } else {
-    alert("A username is required to chat.");
+    alert("A username is required to send messages.");
   }
 }
 

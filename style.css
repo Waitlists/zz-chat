@@ -28,13 +28,32 @@ body {
     margin-bottom: 10px;
   }
   
+  #input-bar {
+    display: flex;
+    gap: 10px;
+  }
+  
   #input {
+    flex: 1;
     padding: 10px;
     background: #111;
     border: none;
     color: white;
     font-size: 16px;
     outline: none;
+  }
+  
+  #send {
+    padding: 10px 20px;
+    background: #222;
+    color: white;
+    border: none;
+    font-size: 16px;
+    cursor: pointer;
+  }
+  
+  #send:hover {
+    background: #444;
   }
   
   .username {
