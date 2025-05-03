@@ -10,6 +10,7 @@ const wss = new WebSocket.Server({ server });
 const ADMIN_PASSWORD = 'HoardedGoats19/@94';
 
 let chatHistory = [];
+let lockdown = false;
 const users = new Map(); // username -> { ws, ip, isAdmin, color }
 
 app.use(express.static(path.join(__dirname)));
@@ -17,8 +18,10 @@ app.use(express.static(path.join(__dirname)));
 wss.on('connection', (ws, req) => {
   const ip = req.headers['x-forwarded-for'] || req.socket.remoteAddress;
   let currentUsername = null;
+  let userColor = null;
 
   ws.send(JSON.stringify({ type: 'history', data: chatHistory }));
+  ws.send(JSON.stringify({ type: 'lockdown', data: lockdown }));
 
   ws.on('message', (msg) => {
     try {
@@ -27,10 +30,10 @@ wss.on('connection', (ws, req) => {
       if (data.type === 'setName') {
         const requestedName = data.data.trim();
         const password = data.password || '';
-        const color = data.color;
+        const validName = /^[a-zA-Z0-9_$#]{1,21}$/;
 
-        if (!/^[a-zA-Z0-9_$#]{1,21}$/.test(requestedName)) {
-          ws.send(JSON.stringify({ type: 'error', data: 'Invalid username. Use only a-z, 0-9, _, $, # (max 21 chars).' }));
+        if (!requestedName || !validName.test(requestedName)) {
+          ws.send(JSON.stringify({ type: 'error', data: 'Invalid username. Use a-z, 0-9, _, $, or # (max 21 chars).' }));
           return;
         }
 
@@ -46,11 +49,11 @@ wss.on('connection', (ws, req) => {
         }
 
         currentUsername = requestedName;
-        users.set(currentUsername, { ws, ip, isAdmin, color });
+        userColor = data.color || `hsl(${Math.floor(Math.random() * 360)}, 100%, 70%)`;
 
+        users.set(currentUsername, { ws, ip, isAdmin, color: userColor });
         ws.send(JSON.stringify({ type: 'nameSet', data: currentUsername }));
         ws.send(JSON.stringify({ type: 'adminStatus', data: isAdmin }));
-        console.log(`${currentUsername} connected (${ip})`);
       }
 
       else if (data.type === 'chat') {
@@ -59,9 +62,14 @@ wss.on('connection', (ws, req) => {
           return;
         }
 
+        if (lockdown && !users.get(currentUsername).isAdmin) {
+          ws.send(JSON.stringify({ type: 'error', data: 'Chat is currently locked.' }));
+          return;
+        }
+
         const messageObj = {
           name: currentUsername,
-          color: data.color,
+          color: userColor,
           message: data.data
         };
 
@@ -80,49 +88,57 @@ wss.on('connection', (ws, req) => {
         switch (cmd) {
           case '/clear':
             chatHistory = [];
-            broadcast({ type: 'clearChat' });
+            broadcast({ type: 'clear' });
+            break;
+
+          case '/lockdown':
+            lockdown = args[0] === 'on';
+            broadcast({ type: 'lockdown', data: lockdown });
             break;
 
           case '/who':
           case '/ip':
-            const targetName = args[0];
-            const targetUser = users.get(targetName);
-            ws.send(JSON.stringify({
-              type: 'system',
-              data: targetUser ? `${targetName} IP: ${targetUser.ip}` : `User "${targetName}" not found.`
-            }));
+            const who = args[0];
+            const user = users.get(who);
+            if (user) {
+              ws.send(JSON.stringify({ type: 'system', data: `${who} IP: ${user.ip}` }));
+            } else {
+              ws.send(JSON.stringify({ type: 'system', data: `User "${who}" not found.` }));
+            }
             break;
 
           case '/online':
-            const userList = Array.from(users.entries()).map(([name, data]) => ({ name, color: data.color }));
+            const userList = [...users.entries()].map(([name, u]) => ({
+              name,
+              color: name.toLowerCase() === 'admin' ? 'red' : u.color
+            }));
             ws.send(JSON.stringify({ type: 'onlineList', data: userList }));
             break;
 
           case '/delete':
-            const target = args[0];
-            const kickedUser = users.get(target);
-            if (kickedUser) {
-              kickedUser.ws.send(JSON.stringify({ type: 'kick', data: 'You have been removed. Refresh and pick a new name.' }));
-              kickedUser.ws.close();
-              users.delete(target);
-              ws.send(JSON.stringify({ type: 'system', data: `${target} was removed.` }));
-            } else {
-              ws.send(JSON.stringify({ type: 'system', data: `User "${target}" not found.` }));
+            const toKick = args[0];
+            const target = users.get(toKick);
+            if (target) {
+              target.ws.send(JSON.stringify({
+                type: 'kick',
+                data: 'You have been removed from the chat. Please refresh and choose a new username.'
+              }));
+              target.ws.close();
+              users.delete(toKick);
             }
             break;
 
           case '/kickall':
-            for (const [name, data] of users.entries()) {
-              if (name.toLowerCase() !== 'admin') {
-                data.ws.send(JSON.stringify({
+            for (const [name, u] of users.entries()) {
+              if (!u.isAdmin) {
+                u.ws.send(JSON.stringify({
                   type: 'kick',
-                  data: 'You have been removed by admin. Refresh and pick a new name.'
+                  data: 'You have been removed from the chat. Please refresh and choose a new username.'
                 }));
-                data.ws.close();
+                u.ws.close();
                 users.delete(name);
               }
             }
-            ws.send(JSON.stringify({ type: 'system', data: 'All users have been kicked.' }));
             break;
 
           default:
@@ -132,26 +148,25 @@ wss.on('connection', (ws, req) => {
       }
 
     } catch (err) {
-      console.error('Error handling message:', err);
+      console.error('Error:', err);
     }
   });
 
   ws.on('close', () => {
-    if (currentUsername && users.has(currentUsername)) {
+    if (currentUsername) {
       users.delete(currentUsername);
-      console.log(`${currentUsername} disconnected`);
     }
   });
 });
 
-function broadcast(message) {
+function broadcast(data) {
   for (const { ws } of users.values()) {
     if (ws.readyState === WebSocket.OPEN) {
-      ws.send(JSON.stringify(message));
+      ws.send(JSON.stringify(data));
     }
   }
 }
 
 server.listen(process.env.PORT || 3000, () => {
-  console.log('zz chat server running on port ' + (process.env.PORT || 3000));
+  console.log('zz chat running on port', process.env.PORT || 3000);
 });

@@ -2,23 +2,18 @@ body {
     margin: 0;
     padding: 0;
     background-color: #000;
-    background-image: repeating-radial-gradient(circle at center, #222 1px, transparent 2px);
-    background-size: 25px 25px;
-    font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+    background-image: radial-gradient(#222 1px, transparent 1px);
+    background-size: 20px 20px;
+    font-family: Arial, sans-serif;
     color: #fff;
   }
   
   #chat-container {
     display: flex;
     flex-direction: column;
-    height: 90vh;
+    height: 100vh;
     max-width: 800px;
-    margin: 20px auto;
-    border: 2px solid #333;
-    border-radius: 10px;
-    overflow: hidden;
-    background-color: #111;
-    box-shadow: 0 0 10px rgba(255, 105, 180, 0.2);
+    margin: 0 auto;
   }
   
   #messages {
@@ -30,33 +25,24 @@ body {
   #input-area {
     display: flex;
     padding: 10px;
-    background-color: #1a1a1a;
+    background-color: #111;
+    gap: 10px;
   }
   
   #input {
     flex: 1;
     padding: 10px;
     border: none;
-    border-radius: 6px;
-    background-color: #222;
-    color: white;
-    font-size: 16px;
+    border-radius: 4px;
   }
   
   #send {
     padding: 10px 20px;
-    margin-left: 10px;
     border: none;
-    border-radius: 6px;
-    background-color: hotpink;
-    color: black;
-    font-weight: bold;
+    border-radius: 4px;
+    background-color: #444;
+    color: #fff;
     cursor: pointer;
-    transition: background-color 0.3s ease;
-  }
-  
-  #send:hover {
-    background-color: #ff69b4;
   }
   
   .username {
@@ -66,15 +52,18 @@ body {
   }
   
   .system-message {
+    color: lime;
+    font-style: normal;
     margin: 5px 0;
   }
   
-  .system-message .prefix {
-    color: lime;
-    font-weight: bold;
-  }
+  @media (max-width: 600px) {
+    #input-area {
+      flex-direction: column;
+    }
   
-  .system-message .text {
-    color: white;
+    #send {
+      width: 100%;
+    }
   }
   
