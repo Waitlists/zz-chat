@@ -1,4 +1,4 @@
-const socket = new WebSocket(`ws://${location.host}`);
+const socket = new WebSocket(`${location.protocol === 'https:' ? 'wss' : 'ws'}://${location.host}`);
 let username = null;
 let color = getRandomColor();
 let pendingMessage = null;
