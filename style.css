@@ -1,57 +1,70 @@
 body {
     margin: 0;
     padding: 0;
-    background-color: #000;
-    background-image: radial-gradient(#222 1px, transparent 1px);
-    background-size: 20px 20px;
-    font-family: Arial, sans-serif;
-    color: #fff;
+    background: repeating-linear-gradient(
+      45deg,
+      #2c3e50,
+      #2c3e50 10px,
+      #34495e 10px,
+      #34495e 20px
+    );
+    font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+    color: white;
   }
   
-  #chat-container {
-    display: flex;
-    flex-direction: column;
-    height: 100vh;
+  .chat-container {
+    width: 60%;
+    margin: 50px auto;
+    background-color: rgba(0, 0, 0, 0.6);
+    border-radius: 10px;
+    padding: 20px;
+    box-shadow: 0 0 10px #000;
   }
   
-  #messages {
-    flex: 1;
-    padding: 10px;
+  .chat-box {
+    height: 400px;
     overflow-y: auto;
-  }
-  
-  #input-area {
-    display: flex;
     padding: 10px;
-    background-color: #111;
+    border: 1px solid #ccc;
+    margin-bottom: 10px;
   }
   
-  #input {
+  .input-container {
+    display: flex;
+  }
+  
+  #messageInput {
     flex: 1;
     padding: 10px;
     border: none;
-    border-radius: 4px;
+    border-radius: 5px 0 0 5px;
   }
   
-  #send {
-    padding: 10px 20px;
-    margin-left: 10px;
+  .send-button {
+    background-color: #1e90ff;
     border: none;
-    border-radius: 4px;
-    background-color: #444;
-    color: #fff;
+    color: white;
+    padding: 10px 20px;
+    border-radius: 0 5px 5px 0;
     cursor: pointer;
+    transition: background-color 0.3s ease;
   }
   
-  .username {
-    font-weight: bold;
-    margin-right: 5px;
-    text-shadow: 0 0 5px;
+  .send-button:hover {
+    background-color: #1c86ee;
   }
   
   .system-message {
-    color: yellow;
-    font-style: italic;
-    margin: 5px 0;
+    color: lime;
+    font-weight: bold;
+  }
+  
+  .system-message span {
+    color: white;
+    font-weight: normal;
+  }
+  
+  .username {
+    text-shadow: 0 0 5px #fff, 0 0 10px currentColor, 0 0 15px currentColor;
   }
   

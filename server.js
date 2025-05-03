@@ -10,7 +10,7 @@ const wss = new WebSocket.Server({ server });
 const ADMIN_PASSWORD = 'HoardedGoats19/@94';
 
 let chatHistory = [];
-const users = new Map(); // username -> { ws, ip, isAdmin }
+const users = new Map(); // username -> { ws, ip, color, isAdmin }
 
 app.use(express.static(path.join(__dirname)));
 
@@ -27,6 +27,7 @@ wss.on('connection', (ws, req) => {
       if (data.type === 'setName') {
         const requestedName = data.data;
         const password = data.password || '';
+        const color = data.color || '#ffffff';
 
         // Reject if already taken
         if (users.has(requestedName)) {
@@ -43,7 +44,7 @@ wss.on('connection', (ws, req) => {
 
         // Set user
         currentUsername = requestedName;
-        users.set(currentUsername, { ws, ip, isAdmin });
+        users.set(currentUsername, { ws, ip, color, isAdmin });
 
         ws.send(JSON.stringify({ type: 'nameSet', data: currentUsername }));
         ws.send(JSON.stringify({ type: 'adminStatus', data: isAdmin }));
@@ -56,9 +57,10 @@ wss.on('connection', (ws, req) => {
           return;
         }
 
+        const user = users.get(currentUsername);
         const messageObj = {
           name: currentUsername,
-          color: data.color,
+          color: user.color,
           message: data.data
         };
 
@@ -77,7 +79,7 @@ wss.on('connection', (ws, req) => {
         switch (cmd) {
           case '/clear':
             chatHistory = [];
-            broadcast({ type: 'system', data: 'Chat history cleared by admin.' });
+            broadcast({ type: 'clearChat' });
             break;
 
           case '/who':
@@ -91,8 +93,11 @@ wss.on('connection', (ws, req) => {
             break;
 
           case '/online':
-            const userList = [...users.keys()].join(', ');
-            ws.send(JSON.stringify({ type: 'system', data: `Online users: ${userList}` }));
+            const userList = [...users.entries()].map(([name, user]) => ({
+              name,
+              color: user.color
+            }));
+            ws.send(JSON.stringify({ type: 'onlineUsers', data: userList }));
             break;
 
           case '/delete':
