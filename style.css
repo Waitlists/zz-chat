@@ -2,48 +2,61 @@ body {
     margin: 0;
     padding: 0;
     background-color: #000;
-    background-image: radial-gradient(#222 1px, transparent 1px);
-    background-size: 20px 20px;
-    font-family: Arial, sans-serif;
+    background-image: repeating-radial-gradient(circle at center, #222 1px, transparent 2px);
+    background-size: 25px 25px;
+    font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
     color: #fff;
   }
   
   #chat-container {
     display: flex;
     flex-direction: column;
-    height: 100vh;
+    height: 90vh;
+    max-width: 800px;
+    margin: 20px auto;
+    border: 2px solid #333;
+    border-radius: 10px;
+    overflow: hidden;
+    background-color: #111;
+    box-shadow: 0 0 10px rgba(255, 105, 180, 0.2);
   }
   
   #messages {
     flex: 1;
     padding: 10px;
     overflow-y: auto;
-    font-size: 1rem;
   }
   
   #input-area {
     display: flex;
     padding: 10px;
-    background-color: #111;
+    background-color: #1a1a1a;
   }
   
   #input {
     flex: 1;
     padding: 10px;
     border: none;
-    border-radius: 4px;
-    font-size: 1rem;
+    border-radius: 6px;
+    background-color: #222;
+    color: white;
+    font-size: 16px;
   }
   
   #send {
     padding: 10px 20px;
     margin-left: 10px;
     border: none;
-    border-radius: 4px;
-    background-color: #444;
-    color: #fff;
+    border-radius: 6px;
+    background-color: hotpink;
+    color: black;
+    font-weight: bold;
     cursor: pointer;
-    font-size: 1rem;
+    transition: background-color 0.3s ease;
+  }
+  
+  #send:hover {
+    background-color: #ff69b4;
   }
   
   .username {
@@ -53,36 +66,15 @@ body {
   }
   
   .system-message {
-    color: lime;
-    font-style: normal;
     margin: 5px 0;
   }
   
-  .system-message::before {
-    content: "[System] ";
+  .system-message .prefix {
     color: lime;
     font-weight: bold;
   }
   
-  /* Mobile styles */
-  @media (max-width: 600px) {
-    #messages {
-      font-size: 0.9rem;
-      padding: 5px;
-    }
-  
-    #input {
-      font-size: 0.9rem;
-      padding: 8px;
-    }
-  
-    #send {
-      font-size: 0.9rem;
-      padding: 8px 12px;
-    }
-  
-    #input-area {
-      padding: 5px;
-    }
+  .system-message .text {
+    color: white;
   }
   
