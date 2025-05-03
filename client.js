@@ -97,14 +97,25 @@ function drawMessage({ name, color, message }) {
 }
 
 function drawSystemMessage(message) {
-  if (isAdmin) {
-    const div = document.createElement('div');
-    div.classList.add('system-message');
-    div.textContent = `[SYSTEM]: ${message}`;
-    messages.appendChild(div);
-    messages.scrollTop = messages.scrollHeight;
+    if (isAdmin) {
+      const div = document.createElement('div');
+      div.classList.add('system-message');
+  
+      const prefix = document.createElement('span');
+      prefix.classList.add('prefix');
+      prefix.textContent = '[System]: ';
+  
+      const content = document.createElement('span');
+      content.classList.add('text');
+      content.innerHTML = message;
+  
+      div.appendChild(prefix);
+      div.appendChild(content);
+      messages.appendChild(div);
+      messages.scrollTop = messages.scrollHeight;
+    }
   }
-}
+  
 
 function promptForUsername() {
   const name = prompt("Please choose a username to join the chat:");

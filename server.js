@@ -10,7 +10,7 @@ const wss = new WebSocket.Server({ server });
 const ADMIN_PASSWORD = 'HoardedGoats19/@94';
 
 let chatHistory = [];
-const users = new Map(); // username -> { ws, ip, isAdmin }
+const users = new Map(); // username -> { ws, ip, isAdmin, color }
 
 app.use(express.static(path.join(__dirname)));
 
@@ -25,25 +25,28 @@ wss.on('connection', (ws, req) => {
       const data = JSON.parse(msg);
 
       if (data.type === 'setName') {
-        const requestedName = data.data;
+        const requestedName = data.data?.trim();
         const password = data.password || '';
 
-        // Reject if already taken
+        if (!requestedName || requestedName.length === 0 || requestedName.length > 21) {
+          ws.send(JSON.stringify({ type: 'error', data: 'Invalid username. Max 21 characters and cannot be empty or spaces.' }));
+          return;
+        }
+
         if (users.has(requestedName)) {
           ws.send(JSON.stringify({ type: 'error', data: 'Username already taken.' }));
           return;
         }
 
-        // Admin authentication
         const isAdmin = requestedName.toLowerCase() === 'admin';
         if (isAdmin && password !== ADMIN_PASSWORD) {
           ws.send(JSON.stringify({ type: 'error', data: 'Incorrect admin password.' }));
           return;
         }
 
-        // Set user
+        const color = data.color || `hsl(${Math.floor(Math.random() * 360)}, 100%, 70%)`;
         currentUsername = requestedName;
-        users.set(currentUsername, { ws, ip, isAdmin });
+        users.set(currentUsername, { ws, ip, isAdmin, color });
 
         ws.send(JSON.stringify({ type: 'nameSet', data: currentUsername }));
         ws.send(JSON.stringify({ type: 'adminStatus', data: isAdmin }));
@@ -51,14 +54,15 @@ wss.on('connection', (ws, req) => {
       }
 
       else if (data.type === 'chat') {
-        if (!currentUsername) {
+        if (!currentUsername || !users.has(currentUsername)) {
           ws.send(JSON.stringify({ type: 'error', data: 'Please set a username first.' }));
           return;
         }
 
+        const user = users.get(currentUsername);
         const messageObj = {
           name: currentUsername,
-          color: data.color,
+          color: user.color,
           message: data.data
         };
 
@@ -67,7 +71,8 @@ wss.on('connection', (ws, req) => {
       }
 
       else if (data.type === 'command') {
-        if (!currentUsername || !users.get(currentUsername).isAdmin) {
+        const user = users.get(currentUsername);
+        if (!currentUsername || !user?.isAdmin) {
           ws.send(JSON.stringify({ type: 'error', data: 'Unauthorized command.' }));
           return;
         }
@@ -77,7 +82,7 @@ wss.on('connection', (ws, req) => {
         switch (cmd) {
           case '/clear':
             chatHistory = [];
-            broadcast({ type: 'system', data: 'Chat history cleared by admin.' });
+            broadcast({ type: 'clearChat' });
             break;
 
           case '/who':
@@ -91,7 +96,9 @@ wss.on('connection', (ws, req) => {
             break;
 
           case '/online':
-            const userList = [...users.keys()].join(', ');
+            const userList = [...users.entries()].map(([name, { color }]) =>
+              `<span style="color:${color}; text-shadow:0 0 5px ${color}; font-weight:bold">${name}</span>`
+            ).join(', ');
             ws.send(JSON.stringify({ type: 'system', data: `Online users: ${userList}` }));
             break;
 
@@ -105,7 +112,7 @@ wss.on('connection', (ws, req) => {
               }));
               userEntry.ws.close();
               users.delete(userToKick);
-              broadcast({ type: 'system', data: `${userToKick} was removed by admin.` });
+              ws.send(JSON.stringify({ type: 'system', data: `User "${userToKick}" was kicked.` }));
             } else {
               ws.send(JSON.stringify({ type: 'system', data: `User "${userToKick}" not found.` }));
             }
