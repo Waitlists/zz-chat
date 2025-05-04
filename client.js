@@ -23,7 +23,6 @@ function attemptSend() {
 input.addEventListener('keydown', (e) => {
   if (e.key === 'Enter') attemptSend();
 });
-
 sendBtn.addEventListener('click', attemptSend);
 
 socket.addEventListener('open', () => {
@@ -50,7 +49,7 @@ socket.addEventListener('message', (e) => {
       break;
     case 'error':
       alert(msg.data);
-      pendingMessage = null;
+      promptForUsername();
       break;
     case 'nameSet':
       username = msg.data;
@@ -73,12 +72,9 @@ socket.addEventListener('message', (e) => {
       break;
     case 'onlineList':
       if (isAdmin) {
-        const div = document.createElement('div');
-        div.classList.add('system-message');
-        div.innerHTML = `<span class="username" style="color: lime; text-shadow: 0 0 5px lime;">[System]</span> <span style="color: white">Online users:</span> ` +
-          msg.data.map(u => `<span class="username" style="color:${u.color}; text-shadow:0 0 5px ${u.color}">${u.name}</span>`).join(', ');
-        messages.appendChild(div);
-        messages.scrollTop = messages.scrollHeight;
+        drawSystemMessage('Online users: ' + msg.data.map(u =>
+          `<span class="username" style="color:${u.color}; text-shadow:0 0 5px ${u.color}">${u.name}</span>`).join(', ')
+        );
       }
       break;
   }
@@ -98,27 +94,28 @@ function drawMessage({ name, color, message }) {
   const nameSpan = document.createElement('span');
   nameSpan.classList.add('username');
   nameSpan.textContent = name + ': ';
+  nameSpan.style.color = color;
+  nameSpan.style.textShadow = `0 0 5px ${color}`;
   if (name.toLowerCase() === 'admin') {
     nameSpan.style.color = 'red';
     nameSpan.style.textShadow = '0 0 5px red';
-  } else {
-    nameSpan.style.color = color;
-    nameSpan.style.textShadow = `0 0 5px ${color}`;
   }
   div.appendChild(nameSpan);
   div.append(message);
+
+  const atBottom = messages.scrollTop + messages.clientHeight >= messages.scrollHeight - 10;
   messages.appendChild(div);
-  messages.scrollTop = messages.scrollHeight;
+  if (atBottom) {
+    messages.scrollTop = messages.scrollHeight;
+  }
 }
 
 function drawSystemMessage(message) {
-  if (isAdmin) {
-    const div = document.createElement('div');
-    div.classList.add('system-message');
-    div.innerHTML = `<span class="username" style="color: lime; text-shadow: 0 0 5px lime;">[System]</span> <span style="color: white">${message}</span>`;
-    messages.appendChild(div);
-    messages.scrollTop = messages.scrollHeight;
-  }
+  const div = document.createElement('div');
+  div.classList.add('system-message');
+  div.innerHTML = `<span class="username" style="color: lime; text-shadow: 0 0 5px lime;">[System]</span> <span style="color: white">${message}</span>`;
+  messages.appendChild(div);
+  messages.scrollTop = messages.scrollHeight;
 }
 
 function promptForUsername() {

@@ -11,12 +11,26 @@ const ADMIN_PASSWORD = 'HoardedGoats19/@94';
 
 let chatHistory = [];
 const users = new Map(); // username -> { ws, ip, isAdmin, color }
+const ipToUsername = new Map(); // ip -> username
 
 app.use(express.static(path.join(__dirname)));
 
 wss.on('connection', (ws, req) => {
   const ip = req.headers['x-forwarded-for'] || req.socket.remoteAddress;
   let currentUsername = null;
+
+  // Attempt auto-login
+  if (ipToUsername.has(ip)) {
+    const autoUser = ipToUsername.get(ip);
+    const userData = users.get(autoUser);
+    if (userData) {
+      currentUsername = autoUser;
+      users.set(currentUsername, { ws, ip, isAdmin: userData.isAdmin, color: userData.color });
+      ws.send(JSON.stringify({ type: 'nameSet', data: currentUsername }));
+      ws.send(JSON.stringify({ type: 'adminStatus', data: userData.isAdmin }));
+      console.log(`Auto-logged in ${currentUsername} from ${ip}`);
+    }
+  }
 
   ws.send(JSON.stringify({ type: 'history', data: chatHistory }));
 
@@ -47,6 +61,7 @@ wss.on('connection', (ws, req) => {
 
         currentUsername = requestedName;
         users.set(currentUsername, { ws, ip, isAdmin, color });
+        ipToUsername.set(ip, currentUsername);
 
         ws.send(JSON.stringify({ type: 'nameSet', data: currentUsername }));
         ws.send(JSON.stringify({ type: 'adminStatus', data: isAdmin }));
@@ -83,7 +98,6 @@ wss.on('connection', (ws, req) => {
             broadcast({ type: 'clearChat' });
             break;
 
-          case '/who':
           case '/ip':
             const targetName = args[0];
             const targetUser = users.get(targetName);
@@ -114,10 +128,7 @@ wss.on('connection', (ws, req) => {
           case '/kickall':
             for (const [name, data] of users.entries()) {
               if (name.toLowerCase() !== 'admin') {
-                data.ws.send(JSON.stringify({
-                  type: 'kick',
-                  data: 'You have been removed by admin. Refresh and pick a new name.'
-                }));
+                data.ws.send(JSON.stringify({ type: 'kick', data: 'You have been removed by admin. Refresh and pick a new name.' }));
                 data.ws.close();
                 users.delete(name);
               }
