@@ -10,27 +10,13 @@ const wss = new WebSocket.Server({ server });
 const ADMIN_PASSWORD = 'HoardedGoats19/@94';
 
 let chatHistory = [];
-const users = new Map(); // username -> { ws, ip, isAdmin, color }
-const ipToUsername = new Map(); // ip -> username
+const users = new Map(); // username -> { sockets: Set<WebSocket>, ip, isAdmin, color }
 
 app.use(express.static(path.join(__dirname)));
 
 wss.on('connection', (ws, req) => {
   const ip = req.headers['x-forwarded-for'] || req.socket.remoteAddress;
   let currentUsername = null;
-
-  // Attempt auto-login
-  if (ipToUsername.has(ip)) {
-    const autoUser = ipToUsername.get(ip);
-    const userData = users.get(autoUser);
-    if (userData) {
-      currentUsername = autoUser;
-      users.set(currentUsername, { ws, ip, isAdmin: userData.isAdmin, color: userData.color });
-      ws.send(JSON.stringify({ type: 'nameSet', data: currentUsername }));
-      ws.send(JSON.stringify({ type: 'adminStatus', data: userData.isAdmin }));
-      console.log(`Auto-logged in ${currentUsername} from ${ip}`);
-    }
-  }
 
   ws.send(JSON.stringify({ type: 'history', data: chatHistory }));
 
@@ -48,7 +34,8 @@ wss.on('connection', (ws, req) => {
           return;
         }
 
-        if (users.has(requestedName)) {
+        const existing = users.get(requestedName);
+        if (existing && existing.ip !== ip) {
           ws.send(JSON.stringify({ type: 'error', data: 'Username already taken.' }));
           return;
         }
@@ -59,13 +46,22 @@ wss.on('connection', (ws, req) => {
           return;
         }
 
+        if (!users.has(requestedName)) {
+          users.set(requestedName, {
+            sockets: new Set(),
+            ip,
+            isAdmin,
+            color
+          });
+        }
+
+        users.get(requestedName).sockets.add(ws);
         currentUsername = requestedName;
-        users.set(currentUsername, { ws, ip, isAdmin, color });
-        ipToUsername.set(ip, currentUsername);
 
         ws.send(JSON.stringify({ type: 'nameSet', data: currentUsername }));
         ws.send(JSON.stringify({ type: 'adminStatus', data: isAdmin }));
-        console.log(`${currentUsername} connected (${ip})`);
+
+        console.log(`${currentUsername} connected from ${ip}`);
       }
 
       else if (data.type === 'chat') {
@@ -85,7 +81,7 @@ wss.on('connection', (ws, req) => {
       }
 
       else if (data.type === 'command') {
-        if (!currentUsername || !users.get(currentUsername).isAdmin) {
+        if (!currentUsername || !users.get(currentUsername)?.isAdmin) {
           ws.send(JSON.stringify({ type: 'error', data: 'Unauthorized command.' }));
           return;
         }
@@ -98,6 +94,7 @@ wss.on('connection', (ws, req) => {
             broadcast({ type: 'clearChat' });
             break;
 
+          case '/who':
           case '/ip':
             const targetName = args[0];
             const targetUser = users.get(targetName);
@@ -116,8 +113,10 @@ wss.on('connection', (ws, req) => {
             const target = args[0];
             const kickedUser = users.get(target);
             if (kickedUser) {
-              kickedUser.ws.send(JSON.stringify({ type: 'kick', data: 'You have been removed. Refresh and pick a new name.' }));
-              kickedUser.ws.close();
+              for (const s of kickedUser.sockets) {
+                s.send(JSON.stringify({ type: 'kick', data: 'You have been removed. Refresh and pick a new name.' }));
+                s.close();
+              }
               users.delete(target);
               ws.send(JSON.stringify({ type: 'system', data: `${target} was removed.` }));
             } else {
@@ -128,12 +127,25 @@ wss.on('connection', (ws, req) => {
           case '/kickall':
             for (const [name, data] of users.entries()) {
               if (name.toLowerCase() !== 'admin') {
-                data.ws.send(JSON.stringify({ type: 'kick', data: 'You have been removed by admin. Refresh and pick a new name.' }));
-                data.ws.close();
+                for (const s of data.sockets) {
+                  s.send(JSON.stringify({
+                    type: 'kick',
+                    data: 'You have been removed by admin. Refresh and pick a new name.'
+                  }));
+                  s.close();
+                }
                 users.delete(name);
               }
             }
             ws.send(JSON.stringify({ type: 'system', data: 'All users have been kicked.' }));
+            break;
+
+          case '/lockdown':
+            broadcast({ type: 'lockdown', data: true });
+            break;
+
+          case '/unlock':
+            broadcast({ type: 'lockdown', data: false });
             break;
 
           default:
@@ -149,16 +161,24 @@ wss.on('connection', (ws, req) => {
 
   ws.on('close', () => {
     if (currentUsername && users.has(currentUsername)) {
-      users.delete(currentUsername);
-      console.log(`${currentUsername} disconnected`);
+      const user = users.get(currentUsername);
+      user.sockets.delete(ws);
+      if (user.sockets.size === 0) {
+        users.delete(currentUsername);
+        console.log(`${currentUsername} fully disconnected`);
+      } else {
+        console.log(`${currentUsername} closed one tab`);
+      }
     }
   });
 });
 
 function broadcast(message) {
-  for (const { ws } of users.values()) {
-    if (ws.readyState === WebSocket.OPEN) {
-      ws.send(JSON.stringify(message));
+  for (const { sockets } of users.values()) {
+    for (const socket of sockets) {
+      if (socket.readyState === WebSocket.OPEN) {
+        socket.send(JSON.stringify(message));
+      }
     }
   }
 }
